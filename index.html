@@ -6,145 +6,17 @@
     <title>NetQuest - Redes, OSI, TCP/IP y Estándares IEEE</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Phosphor Icons para iconos modernos de redes y juego -->
+    <!-- Phosphor Icons para iconos modernos -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <!-- Canvas Confetti para celebración de puntuaciones -->
+    <!-- Canvas Confetti para celebración -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <!-- Tone.js para efectos de sonido procedurales sin dependencias externas -->
+    <!-- Tone.js para efectos de sonido procedurales -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
-    <!-- Firebase SDK v11 en modo modular para sincronización entre dispositivos -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            doc, 
-            setDoc, 
-            getDoc, 
-            updateDoc, 
-            onSnapshot, 
-            collection, 
-            arrayUnion 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <!-- QRCode.js para que los alumnos escaneen el PIN desde su celular -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- PeerJS: Conexión P2P en tiempo real sin servidor (funciona 100% en GitHub Pages) -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
-        // Configuración y variables del entorno
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'netquest-classroom';
-        
-        let db = null;
-        let auth = null;
-        let currentUser = null;
-
-        // Inicializar Firebase si está configurado en el entorno
-        if (typeof __firebase_config !== 'undefined') {
-            try {
-                const firebaseConfig = JSON.parse(__firebase_config);
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-
-                // Autenticación inicial obligatoria
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                currentUser = auth.currentUser;
-                window.cloudSyncAvailable = true;
-            } catch (err) {
-                console.warn("Conexión a nube en fallback local:", err);
-                window.cloudSyncAvailable = false;
-            }
-        } else {
-            window.cloudSyncAvailable = false;
-        }
-
-        // Exponer utilidades para el script del juego
-        window.cloudGame = {
-            isReady: () => !!db && !!currentUser,
-            
-            // Crear o actualizar la sala en la nube
-            async createRoom(pin) {
-                if (!this.isReady()) return;
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', pin);
-                await setDoc(roomRef, {
-                    pin: pin,
-                    hostId: currentUser.uid,
-                    status: 'waiting', // waiting | active | ended
-                    createdAt: Date.now(),
-                    students: []
-                });
-            },
-
-            // Escuchar cambios de la sala (Host o Alumno)
-            subscribeToRoom(pin, callback, errCallback) {
-                if (!this.isReady()) return () => {};
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', pin);
-                return onSnapshot(roomRef, (snapshot) => {
-                    if (snapshot.exists()) {
-                        callback(snapshot.data());
-                    } else {
-                        callback(null);
-                    }
-                }, (err) => {
-                    if (errCallback) errCallback(err);
-                });
-            },
-
-            // Unir a un estudiante a la sala
-            async joinRoom(pin, studentName) {
-                if (!this.isReady()) return { success: false, reason: 'offline' };
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', pin);
-                const snap = await getDoc(roomRef);
-                if (!snap.exists()) {
-                    return { success: false, reason: 'not_found' };
-                }
-                const data = snap.data();
-                const studentId = currentUser.uid;
-                
-                // Agregar estudiante
-                const currentStudents = data.students || [];
-                const existingIdx = currentStudents.findIndex(s => s.id === studentId || s.name.toLowerCase() === studentName.toLowerCase());
-                
-                if (existingIdx >= 0) {
-                    currentStudents[existingIdx].name = studentName;
-                } else {
-                    currentStudents.push({
-                        id: studentId,
-                        name: studentName,
-                        score: 0,
-                        lastAnswerTime: Date.now()
-                    });
-                }
-
-                await updateDoc(roomRef, { students: currentStudents });
-                return { success: true, room: data };
-            },
-
-            // El profesor cambia el estado a 'active' para que todos comiencen
-            async startGame(pin) {
-                if (!this.isReady()) return;
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', pin);
-                await updateDoc(roomRef, { status: 'active', startedAt: Date.now() });
-            },
-
-            // Actualizar la puntuación del estudiante
-            async submitScore(pin, studentName, score) {
-                if (!this.isReady()) return;
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', pin);
-                const snap = await getDoc(roomRef);
-                if (!snap.exists()) return;
-                const data = snap.data();
-                const students = data.students || [];
-                const target = students.find(s => s.name === studentName || s.id === currentUser?.uid);
-                if (target) {
-                    target.score = score;
-                } else {
-                    students.push({ id: currentUser?.uid, name: studentName, score: score });
-                }
-                await updateDoc(roomRef, { students: students });
-            }
-        };
-    </script>
     <script>
         tailwind.config = {
             theme: {
@@ -152,15 +24,6 @@
                     colors: {
                         slate: {
                             950: '#070b13',
-                        }
-                    },
-                    animation: {
-                        'pulse-glow': 'pulseGlow 2s infinite',
-                    },
-                    keyframes: {
-                        pulseGlow: {
-                            '0%, 100%': { boxShadow: '0 0 15px rgba(6, 182, 212, 0.4)' },
-                            '50%': { boxShadow: '0 0 30px rgba(6, 182, 212, 0.8)' }
                         }
                     }
                 }
@@ -182,6 +45,12 @@
         .custom-scroll::-webkit-scrollbar-thumb {
             background-color: #334155;
             border-radius: 4px;
+        }
+        #qrcode img {
+            margin: 0 auto;
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            background: white;
         }
     </style>
 </head>
@@ -219,13 +88,13 @@
         <section id="screen-home" class="w-full max-w-3xl space-y-8 py-6">
             <div class="text-center space-y-3">
                 <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-                    <i class="ph-bold ph-lightning"></i> Desafío de Redes y Telecomunicaciones
+                    <i class="ph-bold ph-broadcast text-emerald-400"></i> Multijugador en Línea (Móvil & PC)
                 </span>
                 <h2 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
                     Domina el Modelo <span class="text-cyan-400">OSI</span> & <span class="text-emerald-400">TCP/IP</span>
                 </h2>
                 <p class="text-slate-400 max-w-xl mx-auto text-sm sm:text-base">
-                    Compite en tiempo real, comprende la pila de protocolos por capas y aprende las claves reales entre <span class="text-amber-300 font-semibold">IEEE 802.2 (LLC)</span> y <span class="text-cyan-300 font-semibold">IEEE 802.11 (Wi-Fi)</span>.
+                    Compite en tiempo real con tu clase. Comprende la arquitectura en capas y aprende las diferencias entre <span class="text-amber-300 font-semibold">IEEE 802.2 (LLC)</span> y <span class="text-cyan-300 font-semibold">IEEE 802.11 (Wi-Fi)</span>.
                 </p>
             </div>
 
@@ -239,18 +108,18 @@
                         </div>
                         <h3 class="text-xl font-bold text-white">Soy Alumno / Jugador</h3>
                         <p class="text-xs text-slate-400 leading-relaxed">
-                            Únete con tu nombre y el PIN de la sala que proyecta tu profesor, o practica en modo autónomo individual para mejorar tu puntuación.
+                            Ingresa tu nombre y el PIN que proyecta tu profesor en pantalla (o escanea el código QR proyectado).
                         </p>
                     </div>
 
                     <div class="mt-6 space-y-3">
-                        <input id="playerNameInput" type="text" placeholder="Ingresa tu Nombre / Alias" maxlength="18" 
+                        <input id="playerNameInput" type="text" placeholder="Ingresa tu Nombre / Apodo" maxlength="18" 
                             class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-400 text-white placeholder-slate-500 transition">
                         
                         <div class="flex gap-2">
-                            <input id="joinPinInput" type="text" placeholder="PIN de Sala (Ej: 4082)" maxlength="6"
+                            <input id="joinPinInput" type="text" placeholder="PIN (ej: 4082)" maxlength="6"
                                 class="w-2/3 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-400 text-white font-mono placeholder-slate-500 text-center tracking-widest uppercase">
-                            <button onclick="joinLobbyAsStudent()" class="w-1/3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-sm transition flex items-center justify-center gap-1 shadow-md shadow-cyan-500/20 active:scale-95">
+                            <button id="joinBtn" onclick="joinLobbyAsStudent()" class="w-1/3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-sm transition flex items-center justify-center gap-1 shadow-md shadow-cyan-500/20 active:scale-95">
                                 <span>Unirse</span>
                                 <i class="ph-bold ph-arrow-right"></i>
                             </button>
@@ -271,18 +140,18 @@
                         </div>
                         <h3 class="text-xl font-bold text-white">Soy Profesor / Anfitrión</h3>
                         <p class="text-xs text-slate-400 leading-relaxed">
-                            Proyecta la sala en la pantalla del aula. Genera un PIN único para que todos tus estudiantes sincronicen sus respuestas en simultáneo.
+                            Proyecta la sala en el cañón o pantalla del aula. Se creará un PIN y un código QR para que toda la clase se conecte al instante.
                         </p>
                     </div>
 
                     <div class="mt-6 space-y-3">
                         <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-1">
                             <div class="flex items-center gap-2 text-emerald-400 font-semibold">
-                                <i class="ph-fill ph-check-circle"></i> Preguntas Curadas de Redes
+                                <i class="ph-fill ph-check-circle"></i> Sincronización en Directo P2P
                             </div>
-                            <p>Capas OSI, Protocolos TCP/IP, LLC 802.2 vs CSMA/CA 802.11.</p>
+                            <p>Tus alumnos compiten en sus celulares y tú ves el podio en tiempo real.</p>
                         </div>
-                        <button onclick="createHostRoom()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-95">
+                        <button id="createRoomBtn" onclick="createHostRoom()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-95">
                             <i class="ph-bold ph-broadcast"></i>
                             <span>Crear Sala de Clase</span>
                         </button>
@@ -292,38 +161,55 @@
         </section>
 
         <!-- ================= PANTALLA 2: LOBBY DEL PROFESOR / HOST ================= -->
-        <section id="screen-host-lobby" class="w-full max-w-3xl hidden space-y-6">
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-2xl relative overflow-hidden">
-                <div class="absolute -top-16 -right-16 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div class="inline-block px-4 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold text-xs uppercase tracking-wider">
-                    SALA DE ESPERA ACTIVA
+        <section id="screen-host-lobby" class="w-full max-w-4xl hidden space-y-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+                <div class="flex flex-col sm:flex-row items-center justify-between border-b border-slate-800 pb-4 gap-3">
+                    <div class="text-center sm:text-left">
+                        <span class="inline-block px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold text-xs uppercase tracking-wider">
+                            SALA EN LÍNEA ACTIVA
+                        </span>
+                        <h2 class="text-2xl font-extrabold text-white mt-1">¡Alumnos, únanse a la partida!</h2>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                        <span class="text-xs text-slate-300 font-mono" id="networkStatusText">Servidor P2P Conectado</span>
+                    </div>
                 </div>
 
-                <h2 class="text-2xl sm:text-3xl font-extrabold text-white">¡Pide a tus alumnos que ingresen el PIN!</h2>
-                
-                <div class="my-4 inline-flex items-center gap-4 bg-slate-950 px-8 py-4 rounded-2xl border-2 border-cyan-500/80 shadow-lg shadow-cyan-500/20">
-                    <span class="text-xs text-slate-400 font-semibold uppercase">CÓDIGO PIN:</span>
-                    <span id="hostPinDisplay" class="font-mono text-4xl sm:text-5xl font-black text-cyan-300 tracking-widest">----</span>
-                </div>
+                <!-- Contenedor PIN + QR -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                    <!-- PIN -->
+                    <div class="text-center md:text-left space-y-3 bg-slate-950 p-6 rounded-2xl border border-slate-800">
+                        <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Código PIN de la Sala</p>
+                        <div id="hostPinDisplay" class="font-mono text-5xl sm:text-6xl font-black text-cyan-300 tracking-widest">
+                            ----
+                        </div>
+                        <p class="text-xs text-slate-400">
+                            Entra a <span class="text-cyan-400 font-bold" id="currentHostUrl">este sitio</span> e ingresa este código.
+                        </p>
+                    </div>
 
-                <p class="text-xs text-slate-400">
-                    Los alumnos conectados en esta misma red o navegador aparecerán abajo al ingresar el código.
-                </p>
+                    <!-- Código QR -->
+                    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col items-center justify-center text-center space-y-2">
+                        <p class="text-xs text-slate-400 font-semibold">O escanea con la cámara del celular:</p>
+                        <div id="qrcode" class="p-2 bg-white rounded-xl shadow-lg"></div>
+                        <span class="text-[11px] text-slate-500">Abre el juego y autocompleta el PIN</span>
+                    </div>
+                </div>
 
                 <!-- Lista de Alumnos Unidos -->
-                <div class="pt-4 text-left">
-                    <div class="flex items-center justify-between text-xs text-slate-400 font-bold mb-3 border-b border-slate-800 pb-2">
-                        <span>ESTUDIANTES CONECTADOS (<span id="connectedCount" class="text-emerald-400">0</span>)</span>
-                        <span class="flex items-center gap-1 text-cyan-400"><i class="ph ph-arrows-clockwise animate-spin"></i> Esperando participantes...</span>
+                <div class="space-y-3 text-left">
+                    <div class="flex items-center justify-between text-xs text-slate-400 font-bold border-b border-slate-800 pb-2">
+                        <span>ESTUDIANTES CONECTADOS (<span id="connectedCount" class="text-emerald-400 text-sm font-bold">0</span>)</span>
+                        <span class="flex items-center gap-1 text-cyan-400"><i class="ph ph-arrows-clockwise animate-spin"></i> Esperando conexiones...</span>
                     </div>
-                    <div id="hostStudentsList" class="flex flex-wrap gap-2 min-h-[90px] p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 items-center justify-center text-slate-500 text-sm">
-                        Aún no hay estudiantes conectados. Ingresa el PIN desde otra pestaña o dispositivo.
+                    <div id="hostStudentsList" class="flex flex-wrap gap-2.5 min-h-[90px] p-4 bg-slate-950/80 rounded-2xl border border-slate-800/80 items-center justify-center text-slate-500 text-sm">
+                        Aún no hay estudiantes conectados. Proyecta este código o el QR en la pizarra.
                     </div>
                 </div>
 
-                <!-- Botón de Inicio por el Profesor -->
-                <div class="pt-4 flex flex-col sm:flex-row gap-3">
+                <!-- Botones de Inicio -->
+                <div class="pt-2 flex flex-col sm:flex-row gap-3">
                     <button onclick="navigate('screen-home')" class="w-full sm:w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl text-sm transition">
                         Cancelar y Salir
                     </button>
@@ -342,9 +228,9 @@
                     <i class="ph-fill ph-wifi-high"></i>
                 </div>
                 <div>
-                    <h3 class="text-2xl font-bold text-white">¡Conexión Establecida!</h3>
+                    <h3 class="text-2xl font-bold text-white">¡Conexión Exitosa con la Sala!</h3>
                     <p class="text-slate-400 text-sm mt-1">
-                        Estás dentro como: <span id="studentConfirmedName" class="font-bold text-cyan-400 text-base">Alumno</span>
+                        Estás conectado como: <span id="studentConfirmedName" class="font-bold text-cyan-400 text-base">Alumno</span>
                     </p>
                     <div class="mt-2 inline-block px-3 py-1 bg-slate-800 text-slate-300 text-xs rounded-full font-mono">
                         SALA PIN: <span id="studentConfirmedPin" class="text-emerald-400 font-bold">0000</span>
@@ -353,18 +239,18 @@
 
                 <div class="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs text-slate-400 leading-relaxed text-left space-y-2">
                     <div class="font-bold text-slate-200 flex items-center gap-1.5">
-                        <i class="ph-bold ph-info text-cyan-400"></i> Consejos rápidos mientras esperas:
+                        <i class="ph-bold ph-info text-cyan-400"></i> Recuerda para sumar más puntos:
                     </div>
                     <ul class="list-disc pl-4 space-y-1 text-slate-400">
-                        <li><strong>OSI</strong> tiene 7 capas conceptuales; <strong>TCP/IP</strong> tiene 4 (o 5 prácticas).</li>
-                        <li><strong>IEEE 802.2 (LLC)</strong> controla el enlace lógico general; <strong>IEEE 802.11</strong> define la capa física y MAC inalámbrica (Wi-Fi).</li>
-                        <li>Las respuestas rápidas dan <span class="text-emerald-400 font-bold">puntos extra</span>.</li>
+                        <li><strong>OSI</strong> tiene 7 capas teóricas; <strong>TCP/IP</strong> tiene 4 prácticas.</li>
+                        <li><strong>IEEE 802.2 (LLC)</strong> es independiente del medio; <strong>IEEE 802.11</strong> es Wi-Fi por radio.</li>
+                        <li>Responder rápido otorga bonificación de puntuación.</li>
                     </ul>
                 </div>
 
-                <div class="flex items-center justify-center gap-2 text-slate-400 text-xs">
+                <div class="flex items-center justify-center gap-2 text-slate-400 text-xs py-2">
                     <i class="ph ph-spinner animate-spin text-cyan-400 text-base"></i>
-                    <span>Esperando a que el profesor inicie el juego...</span>
+                    <span>Esperando a que el profesor inicie la partida...</span>
                 </div>
             </div>
         </section>
@@ -399,8 +285,19 @@
                 <div id="progressBar" class="bg-gradient-to-r from-cyan-500 to-emerald-400 h-full w-0 transition-all duration-300"></div>
             </div>
 
-            <!-- Tarjeta de Pregunta -->
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative">
+            <!-- Si es el Profesor/Host en el cañón, mostramos el tablero de respuestas de la clase -->
+            <div id="hostLiveBoard" class="hidden bg-slate-900/90 border border-cyan-800/40 rounded-2xl p-4 space-y-2">
+                <div class="flex items-center justify-between text-xs text-slate-400 font-bold border-b border-slate-800 pb-2">
+                    <span class="text-cyan-400 flex items-center gap-1.5"><i class="ph-bold ph-chart-line-up"></i> Tablero del Profesor en Directo</span>
+                    <span id="hostAnsweredCounter" class="text-emerald-400">0 respuestas registradas</span>
+                </div>
+                <div id="hostLiveStudentRows" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs">
+                    <!-- Respuestas de los alumnos en tiempo real -->
+                </div>
+            </div>
+
+            <!-- Tarjeta de Pregunta para el Jugador -->
+            <div id="questionCard" class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative">
                 <div class="space-y-2">
                     <h3 id="questionTitle" class="text-lg sm:text-2xl font-extrabold text-white leading-snug">
                         ¿Qué capa del Modelo OSI es la encargada del enrutamiento de paquetes y del direccionamiento lógico (IP)?
@@ -412,17 +309,13 @@
 
                 <!-- Opciones de Respuesta -->
                 <div id="optionsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <!-- Opciones generadas dinámicamente -->
+                    <!-- Generadas dinámicamente -->
                 </div>
 
-                <!-- Feedback & Explicación Didáctica Detallada -->
+                <!-- Feedback & Explicación Pedagógica -->
                 <div id="feedbackContainer" class="hidden mt-4 p-5 rounded-2xl border transition duration-300 space-y-3">
-                    <div class="flex items-center gap-2 font-bold text-base" id="feedbackTitle">
-                        <!-- Correcto / Incorrecto -->
-                    </div>
-                    <p id="feedbackExplanation" class="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                        <!-- Explicación pedagógica -->
-                    </p>
+                    <div class="flex items-center gap-2 font-bold text-base" id="feedbackTitle"></div>
+                    <p id="feedbackExplanation" class="text-xs sm:text-sm text-slate-300 leading-relaxed"></p>
                     <div class="flex justify-end pt-2">
                         <button id="nextQuestionBtn" onclick="nextQuestionStep()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-sm transition flex items-center gap-1.5 shadow-md active:scale-95">
                             <span>Siguiente Pregunta</span>
@@ -441,14 +334,14 @@
                 </div>
                 
                 <div>
-                    <h2 class="text-3xl font-extrabold text-white">¡Fin del Desafío de Redes!</h2>
-                    <p class="text-slate-400 text-sm mt-1">Revisa el podio general y el desempeño de los conceptos clave.</p>
+                    <h2 class="text-3xl font-extrabold text-white">¡Fin de la Batalla de Redes!</h2>
+                    <p class="text-slate-400 text-sm mt-1">Revisa el podio general de la clase y tus aciertos.</p>
                 </div>
 
-                <!-- Cuadro de resumen personal -->
+                <!-- Cuadro de resumen -->
                 <div class="grid grid-cols-3 gap-3 max-w-lg mx-auto bg-slate-950 p-4 rounded-2xl border border-slate-800">
                     <div>
-                        <div class="text-xs text-slate-400">Puntaje Final</div>
+                        <div class="text-xs text-slate-400">Puntaje</div>
                         <div id="finalScoreVal" class="text-2xl font-black text-cyan-400 font-mono">0</div>
                     </div>
                     <div>
@@ -461,10 +354,10 @@
                     </div>
                 </div>
 
-                <!-- Tabla de Posiciones de la Sala -->
+                <!-- Tabla de Posiciones en Directo -->
                 <div class="text-left space-y-3">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                        <i class="ph-bold ph-chart-bar text-cyan-400"></i> Tabla de Posiciones en Directo
+                        <i class="ph-bold ph-chart-bar text-cyan-400"></i> Tabla de Posiciones Final
                     </h3>
                     <div id="leaderboardList" class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden divide-y divide-slate-800/80">
                         <!-- Rellenado dinámicamente -->
@@ -511,25 +404,25 @@
                         <i class="ph-bold ph-stack"></i> 1. Modelo OSI vs. Modelo TCP/IP
                     </div>
                     <p class="text-slate-400 leading-relaxed">
-                        El <strong>Modelo OSI (Open Systems Interconnection)</strong> es un estándar teórico de <strong>7 capas</strong> creado por la ISO para estandarizar la arquitectura de red abierta. Por otro lado, el <strong>Modelo TCP/IP</strong> es un modelo práctico de <strong>4 capas</strong> (o 5 según la literatura moderna) sobre el que opera el Internet moderno.
+                        El <strong>Modelo OSI (Open Systems Interconnection)</strong> es un estándar teórico de <strong>7 capas</strong> creado por la ISO. El <strong>Modelo TCP/IP</strong> es un modelo práctico de <strong>4 capas</strong> con el que funciona el Internet real.
                     </p>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs border border-slate-800 rounded-lg overflow-hidden">
                             <thead class="bg-slate-800 text-cyan-300">
                                 <tr>
-                                    <th class="p-2 border-b border-slate-700">Capa OSI (7 Capas)</th>
+                                    <th class="p-2 border-b border-slate-700">Capa OSI (7)</th>
                                     <th class="p-2 border-b border-slate-700">Capa TCP/IP</th>
-                                    <th class="p-2 border-b border-slate-700">Función Primaria & Ejemplos</th>
+                                    <th class="p-2 border-b border-slate-700">Función & Protocolos</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-800 font-mono text-[11px] text-slate-300">
-                                <tr><td class="p-2 font-bold text-white">7. Aplicación</td><td rowspan="3" class="p-2 bg-slate-900/60 font-semibold text-emerald-400">Aplicación</td><td class="p-2">Interfaz para apps de usuario: HTTP, DNS, DHCP, FTP</td></tr>
-                                <tr><td class="p-2 font-bold text-white">6. Presentación</td><td class="p-2">Formato, cifrado (TLS/SSL) y compresión</td></tr>
-                                <tr><td class="p-2 font-bold text-white">5. Sesión</td><td class="p-2">Mantiene y sincroniza diálogos entre hosts</td></tr>
-                                <tr><td class="p-2 font-bold text-white">4. Transporte</td><td class="p-2 bg-slate-900/60 font-semibold text-emerald-400">Transporte</td><td class="p-2">Segmentación y entrega extremo a extremo: TCP (confiable), UDP</td></tr>
-                                <tr><td class="p-2 font-bold text-white">3. Red</td><td class="p-2 bg-slate-900/60 font-semibold text-emerald-400">Internet</td><td class="p-2">Enrutamiento de paquetes e IP lógicas: IPv4, IPv6, ICMP, Routers</td></tr>
-                                <tr><td class="p-2 font-bold text-white">2. Enlace de Datos</td><td rowspan="2" class="p-2 bg-slate-900/60 font-semibold text-emerald-400">Acceso a Red</td><td class="p-2">Tramas, direcciones físicas (MAC) y detección de errores (Switch)</td></tr>
-                                <tr><td class="p-2 font-bold text-white">1. Física</td><td class="p-2">Bits eléctricos/ópticos/radio, conectores (RJ45, fibra)</td></tr>
+                                <tr><td class="p-2 font-bold text-white">7. Aplicación</td><td rowspan="3" class="p-2 bg-slate-900/60 font-semibold text-emerald-400">Aplicación</td><td class="p-2">HTTP, HTTPS, DNS, DHCP, FTP</td></tr>
+                                <tr><td class="p-2 font-bold text-white">6. Presentación</td><td class="p-2">Formato, cifrado TLS/SSL, compresión</td></tr>
+                                <tr><td class="p-2 font-bold text-white">5. Sesión</td><td class="p-2">Control de diálogo entre aplicaciones</td></tr>
+                                <tr><td class="p-2 font-bold text-white">4. Transporte</td><td class="p-2 bg-slate-900/60 font-semibold text-emerald-400">Transporte</td><td class="p-2">TCP (confiable), UDP (datagramas rápidos)</td></tr>
+                                <tr><td class="p-2 font-bold text-white">3. Red</td><td class="p-2 bg-slate-900/60 font-semibold text-emerald-400">Internet</td><td class="p-2">IP (IPv4/IPv6), Enrutamiento, Routers</td></tr>
+                                <tr><td class="p-2 font-bold text-white">2. Enlace de Datos</td><td rowspan="2" class="p-2 bg-slate-900/60 font-semibold text-emerald-400">Acceso a Red</td><td class="p-2">Tramas, direcciones MAC, Switches</td></tr>
+                                <tr><td class="p-2 font-bold text-white">1. Física</td><td class="p-2">Señales eléctricas/ópticas, cables, bits</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -541,25 +434,24 @@
                         <i class="ph-bold ph-wifi-high"></i> 2. ¿Qué diferencia hay entre IEEE 802.2 y IEEE 802.11?
                     </div>
                     <p class="text-slate-400 leading-relaxed">
-                        En la familia IEEE 802, la <strong>Capa 2 (Enlace de Datos)</strong> se divide en dos subcapas: 
-                        <strong>LLC (Logical Link Control)</strong> y <strong>MAC (Media Access Control)</strong>.
+                        En el estándar IEEE 802, la Capa 2 (Enlace de Datos) se divide en dos subcapas: <strong>LLC</strong> (arriba) y <strong>MAC</strong> (abajo).
                     </p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                         <div class="p-3 bg-slate-900 rounded-xl border border-amber-900/40 space-y-1">
-                            <span class="text-amber-400 font-bold block text-sm">IEEE 802.2 (Subcapa LLC)</span>
+                            <span class="text-amber-400 font-bold block text-sm">IEEE 802.2 (LLC - Logical Link Control)</span>
                             <p class="text-xs text-slate-300">
-                                Es el <strong>Control de Enlace Lógico</strong>. Es independiente del medio físico. Proporciona una interfaz uniforme para que los protocolos de red (como IP) puedan comunicarse con cualquier tecnología de nivel inferior (Ethernet 802.3, Wi-Fi 802.11 o Token Ring).
+                                Es la <strong>subcapa superior de Enlace</strong>. Es independiente del medio físico. Proporciona una interfaz uniforme para que la capa de Red (IP) se comunique con cualquier medio (Ethernet, Wi-Fi o Token Ring).
                             </p>
                         </div>
                         <div class="p-3 bg-slate-900 rounded-xl border border-cyan-900/40 space-y-1">
                             <span class="text-cyan-400 font-bold block text-sm">IEEE 802.11 (Wi-Fi / WLAN)</span>
                             <p class="text-xs text-slate-300">
-                                Especifica la <strong>Capa Física (Radiofrecuencia 2.4/5/6 GHz)</strong> y la <strong>Subcapa MAC Inalámbrica</strong>. Define métodos de acceso como <strong>CSMA/CA</strong> (prevención de colisiones por radio), autenticación WPA y tramas de baliza (Beacon frames).
+                                Define la <strong>Capa Física (Radiofrecuencias 2.4/5/6 GHz)</strong> y la <strong>subcapa MAC inalámbrica</strong> (uso de <strong>CSMA/CA</strong> para evitar colisiones por aire y tramas Wi-Fi).
                             </p>
                         </div>
                     </div>
                     <div class="text-xs bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-cyan-200">
-                        💡 <strong>Regla Nemotécnica:</strong> IEEE 802.2 es el software de enlace genérico (LLC) común; IEEE 802.11 es la implementación física y de acceso inalámbrico concreta (Wi-Fi).
+                        💡 <strong>Regla Nemotécnica:</strong> 802.2 es el software de control de enlace lógico genérico; 802.11 es la radio y el protocolo de acceso inalámbrico físico (Wi-Fi).
                     </div>
                 </div>
 
@@ -568,13 +460,13 @@
             <!-- Modal Footer -->
             <div class="p-4 bg-slate-950 border-t border-slate-800 flex justify-end">
                 <button onclick="hideCheatSheetModal()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition">
-                    Entendido, ¡Listo para Jugar!
+                    Entendido, ¡Listo!
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Notification Toast -->
+    <!-- Toast de Notificaciones -->
     <div id="toast" class="fixed bottom-5 right-5 z-50 bg-slate-800 border border-cyan-500 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-transform duration-300 translate-y-24 opacity-0 pointer-events-none">
         <i id="toastIcon" class="ph-bold ph-check text-cyan-400 text-xl"></i>
         <span id="toastMsg" class="text-sm font-semibold">Mensaje</span>
@@ -582,17 +474,12 @@
 
     <footer class="w-full bg-slate-950 border-t border-slate-800/80 py-4 px-4 text-center text-xs text-slate-400">
         <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span>NetQuest Pro &bull; Diseñado para clases interactivas de Redes y Telecomunicaciones</span>
+            <span>NetQuest Pro &bull; Diseñado para clases interactivas de Redes</span>
             <span class="text-slate-400">Modelo OSI &bull; Protocolos TCP/IP &bull; IEEE 802.2 & 802.11</span>
         </div>
     </footer>
 
 <script>
-    /* ==========================================================
-       BANCO DE PREGUNTAS RIGUROSO Y PEDAGÓGICO
-       Cubre: Modelo OSI (sus 7 capas), Modelo TCP/IP (diferencias)
-       y comparación entre IEEE 802.2 (LLC) vs IEEE 802.11 (WLAN)
-       ========================================================== */
     const QUESTION_BANK = [
         {
             topic: "Modelo OSI",
@@ -608,7 +495,7 @@
         },
         {
             topic: "Modelo OSI",
-            question: "¿En cuál de las capas del Modelo OSI opera el protocolo TCP y UDP garantizando o no la entrega de segmentos?",
+            question: "¿En cuál de las capas del Modelo OSI operan los protocolos TCP y UDP para control de flujo y entrega extremo a extremo?",
             options: [
                 "Capa 4: Transporte",
                 "Capa 5: Sesión",
@@ -616,19 +503,19 @@
                 "Capa 2: Enlace de Datos"
             ],
             correct: 0,
-            explanation: "La Capa de Transporte (Capa 4) proporciona comunicación extremo a extremo y control de flujo; TCP (orientado a conexión) y UDP (no orientado a conexión) son sus máximos exponentes."
+            explanation: "La Capa de Transporte (Capa 4) proporciona comunicación entre procesos de extremo a extremo; TCP (confiable y orientado a conexión) y UDP (rápido sin conexión) pertenecen a ella."
         },
         {
             topic: "OSI vs TCP/IP",
-            question: "¿Cuál es la principal diferencia estructural entre el Modelo OSI y el Modelo TCP/IP respecto al número de capas?",
+            question: "¿Cuál es la principal diferencia estructural entre el Modelo OSI y el Modelo TCP/IP respecto a la cantidad de capas?",
             options: [
                 "OSI tiene 4 capas y TCP/IP tiene 7 capas",
                 "OSI tiene 7 capas teóricas; TCP/IP tiene 4 (o 5) capas prácticas sobre las que funciona Internet",
-                "Ambos modelos poseen exactamente las mismas 7 capas pero con diferentes nombres",
+                "Ambos modelos poseen exactamente las mismas capas con idénticos nombres",
                 "El modelo TCP/IP carece por completo de capa de transporte"
             ],
             correct: 1,
-            explanation: "El modelo OSI es un marco de referencia teórico de 7 capas, mientras que TCP/IP surgió de ARPANET con 4 capas funcionales (Aplicación, Transporte, Internet y Acceso a Red)."
+            explanation: "El modelo OSI es un marco de referencia teórico de 7 capas (ISO), mientras que TCP/IP surgió con 4 capas funcionales implementadas en los sistemas operativos reales."
         },
         {
             topic: "OSI vs TCP/IP",
@@ -640,7 +527,7 @@
                 "Capa de Acceso a la Red"
             ],
             correct: 2,
-            explanation: "TCP/IP no distingue formalmente entre sesión y presentación; agrupa todas las funciones del nivel de usuario directamente en la Capa de Aplicación (HTTP, DNS, SSH, etc.)."
+            explanation: "TCP/IP no separa sesión ni presentación en capas independientes; concentra todos los servicios de nivel de usuario en una única Capa de Aplicación (HTTP, SSH, DNS, etc.)."
         },
         {
             topic: "Estándares IEEE",
@@ -649,7 +536,7 @@
                 "Define la frecuencia de radio Wi-Fi en 5 GHz",
                 "Define la subcapa LLC (Control de Enlace Lógico) independiente del medio físico",
                 "Estandariza los cables de fibra óptica submarinos",
-                "Gestiona el cifrado de contraseñas WPA3"
+                "Gestiona las contraseñas y claves WPA3"
             ],
             correct: 1,
             explanation: "IEEE 802.2 define la subcapa LLC (Logical Link Control), proporcionando una interfaz uniforme de nivel superior que desacopla la capa de red del medio físico particular (Ethernet, Wi-Fi o Token Ring)."
@@ -660,35 +547,35 @@
             options: [
                 "802.2 es para Bluetooth y 802.11 es para satélites",
                 "802.2 define el Control de Enlace Lógico (LLC); 802.11 define la capa Física y MAC de redes inalámbricas locales (Wi-Fi)",
-                "802.11 es cableado de par trenzado y 802.2 es inalámbrico",
-                "No hay diferencia, son dos nombres del mismo protocolo de enrutamiento IP"
+                "802.11 es cableado de cobre y 802.2 es exclusivamente inalámbrico",
+                "No hay diferencia, son sinónimos del mismo protocolo de enrutamiento"
             ],
             correct: 1,
-            explanation: "802.2 es la subcapa superior de Capa 2 (LLC universal), mientras que 802.11 abarca la subcapa MAC inalámbrica (CSMA/CA) y la capa física de radiofrecuencia (WLAN / Wi-Fi)."
+            explanation: "802.2 es la subcapa superior de Enlace de Datos (LLC universal), mientras que 802.11 define la subcapa MAC inalámbrica (CSMA/CA) y la capa física de radiofrecuencia (Wi-Fi)."
         },
         {
             topic: "Modelo OSI",
             question: "¿Qué funciones corresponden específicamente a la Capa 6 (Presentación) del Modelo OSI?",
             options: [
-                "Transmisión de pulsos eléctricos y voltajes",
+                "Transmisión de voltajes y pulsos de luz",
                 "Formateo, cifrado (como TLS/SSL) y compresión de datos para la aplicación",
                 "Asignación de puertos origen y destino",
                 "Detección de colisiones mediante señales electromagnéticas"
             ],
             correct: 1,
-            explanation: "La Capa de Presentación traduce la sintaxis y semántica: se encarga del cifrado/descifrado, compresión y codificación de caracteres para que las aplicaciones entiendan los datos."
+            explanation: "La Capa de Presentación traduce la sintaxis y semántica: se encarga del cifrado, descifrado, compresión y codificación de caracteres para que las aplicaciones comprendan la información."
         },
         {
             topic: "Estándares IEEE",
-            question: "¿Qué método de control de acceso al medio utiliza el estándar IEEE 802.11 para mitigar interferencias inalámbricas?",
+            question: "¿Qué método de control de acceso al medio utiliza el estándar IEEE 802.11 para mitigar colisiones inalámbricas?",
             options: [
-                "CSMA/CD (Detección de Colisiones como Ethernet clásico)",
-                "CSMA/CA (Evitación de Colisiones mediante RTS/CTS y ACKs)",
-                "Paso de testigo Token Ring",
-                "Multiplexación por división de código exclusivamente síncrona"
+                "CSMA/CD (Detección de Colisiones como Ethernet con cable)",
+                "CSMA/CA (Evitación de Colisiones mediante temporizadores y confirmaciones ACK)",
+                "Paso de testigo Token Ring rotativo",
+                "Multiplexación por división de tiempo exclusivamente síncrona"
             ],
             correct: 1,
-            explanation: "Como en radio es imposible escuchar mientras se transmite a plena potencia (no se puede detectar colisión directa), 802.11 usa CSMA/CA (Collision Avoidance) con confirmación ACK."
+            explanation: "En ondas de radio no es viable transmitir y escuchar a la vez (no se puede detectar colisión directa). Por eso 802.11 emplea CSMA/CA (Collision Avoidance) con confirmación ACK."
         },
         {
             topic: "OSI vs TCP/IP",
@@ -700,19 +587,19 @@
                 "Bit"
             ],
             correct: 2,
-            explanation: "Las PDUs reciben nombres específicos: Capa 1 = Bits, Capa 2 = Tramas (Frames), Capa 3 = Paquetes (Packets), Capa 4 = Segmentos (TCP) o Datagramas (UDP)."
+            explanation: "Nomenclatura PDU: Capa 1 = Bits, Capa 2 = Tramas (Frames), Capa 3 = Paquetes (Packets), Capa 4 = Segmentos (TCP) o Datagramas (UDP)."
         },
         {
             topic: "Estándares IEEE",
-            question: "En una trama Wi-Fi (802.11), ¿cómo interactúa con IEEE 802.2?",
+            question: "En una trama Wi-Fi (802.11), ¿cómo interactúa con el estándar IEEE 802.2?",
             options: [
-                "802.11 descarta toda la información de red",
+                "802.11 ignora cualquier información de capa superior",
                 "La carga útil de la trama 802.11 encapsula la cabecera LLC (802.2/SNAP) para identificar el protocolo de red superior (como IP)",
-                "802.2 reemplaza los puntos de acceso inalámbricos",
-                "Ambos estándares son incompatibles y no pueden coexistir"
+                "802.2 reemplaza a los puntos de acceso y antenas",
+                "Ambos estándares son incompatibles y nunca operan juntos"
             ],
             correct: 1,
-            explanation: "La trama 802.11 transporta en su cuerpo la cabecera 802.2 LLC (frecuentemente con extensión SNAP) para indicar si el paquete contiene IPv4, IPv6 o ARP."
+            explanation: "La trama 802.11 lleva en su cuerpo la cabecera 802.2 LLC (frecuentemente con extensión SNAP) para avisarle al receptor si el paquete encapsulado es IPv4, IPv6 o ARP."
         }
     ];
 
@@ -728,19 +615,16 @@
         timerInterval: null,
         soundEnabled: true,
         hostParticipants: [],
-        syncChannel: null,
-        unsubscribeRoom: null
+        answeredThisRound: 0
     };
 
-    // Inicialización del canal BroadcastChannel para sincronizar múltiples pestañas (Multijugador local en navegador)
-    try {
-        gameState.syncChannel = new BroadcastChannel('netquest_classroom_channel');
-        gameState.syncChannel.onmessage = handleBroadcastMessage;
-    } catch (e) {
-        console.warn('BroadcastChannel no soportado, fallback a modo individual');
-    }
+    // Variables de red WebRTC / PeerJS
+    let hostPeer = null;
+    let hostConnections = [];
+    let studentPeer = null;
+    let studentConnection = null;
 
-    // Sistema de Audio procedural usando Tone.js
+    // Inicializar Audio con Tone.js
     let synth = null;
     function initAudio() {
         if (!synth && typeof Tone !== 'undefined') {
@@ -756,7 +640,7 @@
         if (!gameState.soundEnabled) return;
         try {
             initAudio();
-            if (Tone.context.state !== 'running') {
+            if (Tone.context && Tone.context.state !== 'running') {
                 Tone.start();
             }
             if (type === 'correct') {
@@ -768,9 +652,7 @@
             } else if (type === 'fanfare') {
                 synth.triggerAttackRelease(["C4", "E4", "G4", "C5"], "8n");
             }
-        } catch (err) {
-            // Silencioso si el navegador bloquea autoplay
-        }
+        } catch (err) {}
     }
 
     function toggleAudio() {
@@ -818,7 +700,7 @@
         
         setTimeout(() => {
             toast.className = toast.className.replace('translate-y-0 opacity-100', 'translate-y-24 opacity-0 pointer-events-none');
-        }, 3200);
+        }, 3500);
     }
 
     function showCheatSheetModal() {
@@ -839,46 +721,167 @@
         return Math.floor(1000 + Math.random() * 9000).toString();
     }
 
-    async function createHostRoom() {
+    function createHostRoom() {
         playSound('click');
         gameState.mode = 'host';
         gameState.pin = generatePin();
         gameState.hostParticipants = [];
+        hostConnections = [];
 
         document.getElementById('hostPinDisplay').textContent = gameState.pin;
         document.getElementById('connectedCount').textContent = '0';
         updateHostStudentListUI();
 
-        navigate('screen-host-lobby');
+        // Limpiar QR anterior
+        const qrContainer = document.getElementById('qrcode');
+        qrContainer.innerHTML = '';
 
-        // Registro en la nube (Multidispositivo)
-        if (window.cloudGame && window.cloudGame.isReady()) {
-            try {
-                await window.cloudGame.createRoom(gameState.pin);
-                
-                // Suscribirse a los alumnos que ingresen desde teléfonos u otras PCs
-                if (gameState.unsubscribeRoom) gameState.unsubscribeRoom();
-                gameState.unsubscribeRoom = window.cloudGame.subscribeToRoom(gameState.pin, (roomData) => {
-                    if (!roomData) return;
-                    if (roomData.students && Array.isArray(roomData.students)) {
-                        gameState.hostParticipants = roomData.students;
-                        updateHostStudentListUI();
-                    }
-                }, (err) => console.error(err));
-            } catch (e) {
-                console.error("Error al registrar sala en nube:", e);
+        // Construir URL completa con el PIN para los alumnos
+        const baseUrl = window.location.origin + window.location.pathname;
+        const joinUrl = `${baseUrl}?pin=${gameState.pin}`;
+        document.getElementById('currentHostUrl').textContent = window.location.hostname || 'este enlace';
+
+        // Generar Código QR
+        new QRCode(qrContainer, {
+            text: joinUrl,
+            width: 150,
+            height: 150,
+            colorDark: "#030712",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M
+        });
+
+        // Conectar a PeerJS con un ID único para la sala
+        const peerRoomId = `netquest-u2-${gameState.pin}`;
+        
+        if (hostPeer) {
+            try { hostPeer.destroy(); } catch(e){}
+        }
+
+        document.getElementById('networkStatusText').textContent = 'Creando sala en red...';
+
+        hostPeer = new Peer(peerRoomId);
+
+        hostPeer.on('open', (id) => {
+            document.getElementById('networkStatusText').textContent = 'Sala en Vivo (Esperando)';
+            showToast(`¡Sala ${gameState.pin} creada con éxito!`);
+        });
+
+        hostPeer.on('connection', (conn) => {
+            conn.on('open', () => {
+                hostConnections.push(conn);
+            });
+
+            conn.on('data', (data) => {
+                handleHostIncomingData(data, conn);
+            });
+
+            conn.on('close', () => {
+                // Estudiante desconectado
+                hostConnections = hostConnections.filter(c => c !== conn);
+            });
+        });
+
+        hostPeer.on('error', (err) => {
+            if (err.type === 'unavailable-id') {
+                // PIN ya ocupado por casualidad, reintentar con otro
+                createHostRoom();
+            } else {
+                console.warn("PeerJS aviso:", err);
+            }
+        });
+
+        navigate('screen-host-lobby');
+    }
+
+    function handleHostIncomingData(data, conn) {
+        if (!data) return;
+
+        // Estudiante se une
+        if (data.type === 'STUDENT_JOIN') {
+            const exists = gameState.hostParticipants.some(p => p.name.toLowerCase() === data.name.toLowerCase());
+            if (!exists) {
+                gameState.hostParticipants.push({
+                    name: data.name,
+                    score: 0,
+                    answered: false
+                });
+                updateHostStudentListUI();
+                playSound('correct');
+                showToast(`¡${data.name} se ha unido a la sala!`);
+                conn.send({ type: 'ACK_JOIN', pin: gameState.pin });
             }
         }
 
-        // Notificar también por BroadcastChannel local
-        broadcast({
-            type: 'ROOM_CREATED',
-            pin: gameState.pin
-        });
-        showToast(`Sala creada con éxito. PIN: ${gameState.pin}`);
+        // Estudiante actualiza su puntaje durante el quiz
+        if (data.type === 'SCORE_UPDATE') {
+            const target = gameState.hostParticipants.find(p => p.name === data.name);
+            if (target) {
+                target.score = data.score;
+                target.answered = true;
+            } else {
+                gameState.hostParticipants.push({ name: data.name, score: data.score, answered: true });
+            }
+            updateHostLiveScoreboard();
+        }
     }
 
-    async function joinLobbyAsStudent() {
+    function updateHostStudentListUI() {
+        const container = document.getElementById('hostStudentsList');
+        const countSpan = document.getElementById('connectedCount');
+        countSpan.textContent = gameState.hostParticipants.length;
+
+        if (gameState.hostParticipants.length === 0) {
+            container.innerHTML = `<span class="text-slate-500 text-xs italic">Aún no hay alumnos conectados. Pídeles que escaneen el código QR o ingresen el PIN.</span>`;
+            return;
+        }
+
+        container.innerHTML = '';
+        gameState.hostParticipants.forEach((st) => {
+            const badge = document.createElement('div');
+            badge.className = 'flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-cyan-800 text-cyan-300 rounded-xl text-xs font-semibold animate-pulse';
+            badge.innerHTML = `
+                <i class="ph-fill ph-student text-emerald-400"></i>
+                <span>${st.name}</span>
+            `;
+            container.appendChild(badge);
+        });
+    }
+
+    function updateHostLiveScoreboard() {
+        const liveRows = document.getElementById('hostLiveStudentRows');
+        if (!liveRows) return;
+        liveRows.innerHTML = '';
+
+        const answeredCount = gameState.hostParticipants.filter(p => p.answered).length;
+        document.getElementById('hostAnsweredCounter').textContent = `${answeredCount}/${gameState.hostParticipants.length} alumnos respondieron`;
+
+        gameState.hostParticipants.forEach(st => {
+            const item = document.createElement('div');
+            item.className = 'p-2 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between';
+            item.innerHTML = `
+                <span class="truncate text-slate-300 font-medium">${st.name}</span>
+                <span class="font-mono text-emerald-400 font-bold ml-1">${st.score} pts</span>
+            `;
+            liveRows.appendChild(item);
+        });
+    }
+
+    function hostStartGame() {
+        playSound('fanfare');
+        // Notificar a todos los dispositivos conectados que el juego comienza
+        hostConnections.forEach(conn => {
+            try {
+                conn.send({ type: 'GAME_STARTED' });
+            } catch(e) {}
+        });
+
+        // Configurar vista del profesor
+        document.getElementById('hostLiveBoard').classList.remove('hidden');
+        startActualGameSession();
+    }
+
+    function joinLobbyAsStudent() {
         playSound('click');
         const nameInput = document.getElementById('playerNameInput');
         const pinInput = document.getElementById('joinPinInput');
@@ -903,34 +906,52 @@
         document.getElementById('studentConfirmedName').textContent = name;
         document.getElementById('studentConfirmedPin').textContent = pin;
 
-        // Intentar unirse mediante la nube (Multidispositivo)
-        if (window.cloudGame && window.cloudGame.isReady()) {
-            const res = await window.cloudGame.joinRoom(pin, name);
-            if (res.reason === 'not_found') {
-                showToast(`El PIN ${pin} no existe. Verifica con tu profesor.`, false);
-                return;
-            }
-            
-            // Suscribirse para enterarse en el momento exacto que el profesor inicia
-            if (gameState.unsubscribeRoom) gameState.unsubscribeRoom();
-            gameState.unsubscribeRoom = window.cloudGame.subscribeToRoom(pin, (roomData) => {
-                if (roomData && roomData.status === 'active') {
-                    showToast('¡El profesor ha iniciado el juego!', true);
-                    startActualGameSession();
-                }
-            }, (err) => console.error(err));
+        const joinBtn = document.getElementById('joinBtn');
+        joinBtn.disabled = true;
+        joinBtn.innerHTML = `<i class="ph ph-spinner animate-spin"></i>`;
+
+        // Crear cliente PeerJS
+        if (studentPeer) {
+            try { studentPeer.destroy(); } catch(e){}
         }
 
-        navigate('screen-student-waiting');
+        studentPeer = new Peer();
 
-        // Enviar aviso por BroadcastChannel
-        broadcast({
-            type: 'STUDENT_JOIN',
-            pin: pin,
-            studentName: name,
-            id: 'id_' + Math.random().toString(36).substr(2, 9)
+        studentPeer.on('open', (id) => {
+            const peerRoomId = `netquest-u2-${pin}`;
+            studentConnection = studentPeer.connect(peerRoomId, { reliable: true });
+
+            studentConnection.on('open', () => {
+                studentConnection.send({
+                    type: 'STUDENT_JOIN',
+                    name: name
+                });
+                joinBtn.disabled = false;
+                joinBtn.innerHTML = `<span>Unirse</span><i class="ph-bold ph-arrow-right"></i>`;
+                navigate('screen-student-waiting');
+                showToast(`¡Conectado exitosamente con la sala ${pin}!`);
+            });
+
+            studentConnection.on('data', (data) => {
+                if (data.type === 'GAME_STARTED') {
+                    showToast('¡El profesor ha iniciado el juego!', true);
+                    document.getElementById('hostLiveBoard').classList.add('hidden');
+                    startActualGameSession();
+                }
+            });
+
+            studentConnection.on('error', (err) => {
+                joinBtn.disabled = false;
+                joinBtn.innerHTML = `<span>Unirse</span><i class="ph-bold ph-arrow-right"></i>`;
+                showToast('No se encontró la sala. Revisa que el PIN sea correcto.', false);
+            });
         });
-        showToast(`¡Conectado a la sala ${pin}!`);
+
+        studentPeer.on('error', (err) => {
+            joinBtn.disabled = false;
+            joinBtn.innerHTML = `<span>Unirse</span><i class="ph-bold ph-arrow-right"></i>`;
+            showToast('No se pudo conectar a la red de la sala. Verifica el PIN.', false);
+        });
     }
 
     function startSinglePlayer() {
@@ -938,92 +959,8 @@
         const nameInput = document.getElementById('playerNameInput').value.trim();
         gameState.mode = 'single';
         gameState.playerName = nameInput || 'Explorador de Redes';
+        document.getElementById('hostLiveBoard').classList.add('hidden');
         startActualGameSession();
-    }
-
-    async function hostStartGame() {
-        playSound('fanfare');
-        
-        // Activar inicio en la nube para todos los celulares y laptops
-        if (window.cloudGame && window.cloudGame.isReady() && gameState.pin) {
-            await window.cloudGame.startGame(gameState.pin);
-        }
-
-        broadcast({
-            type: 'GAME_STARTED',
-            pin: gameState.pin
-        });
-        gameState.playerName = 'Profesor (Host)';
-        startActualGameSession();
-    }
-
-    function updateHostStudentListUI() {
-        const container = document.getElementById('hostStudentsList');
-        const countSpan = document.getElementById('connectedCount');
-        countSpan.textContent = gameState.hostParticipants.length;
-
-        if (gameState.hostParticipants.length === 0) {
-            container.innerHTML = `<span class="text-slate-500 text-xs italic">Aún no hay alumnos conectados. Proyecta el PIN ${gameState.pin} en el proyector del aula.</span>`;
-            return;
-        }
-
-        container.innerHTML = '';
-        gameState.hostParticipants.forEach((st, idx) => {
-            const badge = document.createElement('div');
-            badge.className = 'flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-cyan-800 text-cyan-300 rounded-xl text-xs font-semibold animate-fadeIn';
-            badge.innerHTML = `
-                <i class="ph-fill ph-student text-emerald-400"></i>
-                <span>${st.name}</span>
-            `;
-            container.appendChild(badge);
-        });
-    }
-
-    // Gestión de mensajes entre pestañas/alumnos
-    function broadcast(payload) {
-        if (gameState.syncChannel) {
-            gameState.syncChannel.postMessage(payload);
-        }
-    }
-
-    function handleBroadcastMessage(event) {
-        const data = event.data;
-        if (!data) return;
-
-        // Si soy el Host y alguien se une a mi sala
-        if (gameState.mode === 'host' && data.type === 'STUDENT_JOIN' && data.pin === gameState.pin) {
-            const exists = gameState.hostParticipants.some(p => p.name.toLowerCase() === data.studentName.toLowerCase());
-            if (!exists) {
-                gameState.hostParticipants.push({ name: data.studentName, score: 0 });
-                updateHostStudentListUI();
-                playSound('correct');
-                showToast(`¡${data.studentName} se ha unido!`);
-                // Responderle al alumno confirmando presencia
-                broadcast({
-                    type: 'ACK_STUDENT',
-                    pin: gameState.pin,
-                    studentName: data.studentName
-                });
-            }
-        }
-
-        // Si soy alumno y el Host inicia el juego
-        if (gameState.mode === 'student' && data.type === 'GAME_STARTED' && data.pin === gameState.pin) {
-            showToast('¡El profesor ha iniciado el juego!', true);
-            startActualGameSession();
-        }
-
-        // Sincronización de puntajes para el marcador en vivo
-        if (data.type === 'SCORE_UPDATE' && data.pin === gameState.pin) {
-            if (gameState.mode === 'host') {
-                const found = gameState.hostParticipants.find(p => p.name === data.studentName);
-                if (found) {
-                    found.score = data.score;
-                } else {
-                    gameState.hostParticipants.push({ name: data.studentName, score: data.score });
-                }
-            }
-        }
     }
 
     function startActualGameSession() {
@@ -1046,6 +983,12 @@
         if (!q) {
             finishGameSession();
             return;
+        }
+
+        // Resetear estado de respuesta en el host
+        if (gameState.mode === 'host') {
+            gameState.hostParticipants.forEach(p => p.answered = false);
+            updateHostLiveScoreboard();
         }
 
         // UI Reset
@@ -1078,7 +1021,7 @@
             grid.appendChild(btn);
         });
 
-        // Configurar Temporizador (20 segundos por pregunta)
+        // Configurar Temporizador (20s)
         gameState.timer = 20;
         document.getElementById('timerDisplay').textContent = `${gameState.timer}s`;
         document.getElementById('timerDisplay').className = 'font-mono text-xl font-extrabold text-amber-400';
@@ -1107,7 +1050,7 @@
         // Deshabilitar botones para evitar multi-clic
         optionButtons.forEach(b => b.disabled = true);
 
-        // Resaltar colores
+        // Resaltar opciones
         optionButtons.forEach((btn, idx) => {
             if (idx === q.correct) {
                 btn.className = 'w-full p-4 rounded-2xl bg-emerald-950/80 border-2 border-emerald-400 text-white flex items-start gap-3 shadow-lg shadow-emerald-500/20';
@@ -1124,7 +1067,6 @@
 
         if (isCorrect) {
             playSound('correct');
-            // Cálculo de puntaje: base 100 + bonificación de tiempo
             const pointsGained = 100 + (gameState.timer * 5);
             gameState.score += pointsGained;
             gameState.correctAnswers++;
@@ -1146,15 +1088,11 @@
         document.getElementById('scoreDisplay').textContent = `${gameState.score} pts`;
         feedbackExp.innerHTML = `<strong>Explicación:</strong> ${q.explanation}`;
 
-        // Sincronizar puntaje si está en modo alumno (Nube y local)
-        if (gameState.mode === 'student' && gameState.pin) {
-            if (window.cloudGame && window.cloudGame.isReady()) {
-                window.cloudGame.submitScore(gameState.pin, gameState.playerName, gameState.score);
-            }
-            broadcast({
+        // Enviar puntaje al profesor en tiempo real
+        if (gameState.mode === 'student' && studentConnection && studentConnection.open) {
+            studentConnection.send({
                 type: 'SCORE_UPDATE',
-                pin: gameState.pin,
-                studentName: gameState.playerName,
+                name: gameState.playerName,
                 score: gameState.score
             });
         }
@@ -1175,16 +1113,14 @@
         document.getElementById('progressBar').style.width = '100%';
         playSound('fanfare');
 
-        // Confeti de celebración
         if (typeof confetti === 'function') {
             confetti({
-                particleCount: 80,
-                spread: 70,
+                particleCount: 90,
+                spread: 75,
                 origin: { y: 0.6 }
             });
         }
 
-        // Cálculos
         const total = QUESTION_BANK.length;
         const accuracy = Math.round((gameState.correctAnswers / total) * 100);
 
@@ -1200,13 +1136,15 @@
         const board = document.getElementById('leaderboardList');
         board.innerHTML = '';
 
-        // Construir tabla integrando el jugador actual y los demás si hubo sala
         let participants = [];
 
         if (gameState.mode === 'host' && gameState.hostParticipants.length > 0) {
             participants = [...gameState.hostParticipants];
+            // Si el profesor también jugó, incluirlo
+            if (!participants.some(p => p.name === 'Profesor')) {
+                participants.push({ name: 'Profesor', score: gameState.score });
+            }
         } else {
-            // Modo individual o estudiante: asegurar que esté el usuario y mocks educativos si está solo
             participants.push({ name: gameState.playerName, score: gameState.score, isUser: true });
             if (participants.length === 1) {
                 participants.push({ name: 'Router_Master', score: Math.max(300, gameState.score - 150) });
@@ -1215,7 +1153,6 @@
             }
         }
 
-        // Ordenar descendentemente
         participants.sort((a, b) => b.score - a.score);
 
         participants.forEach((user, idx) => {
@@ -1245,9 +1182,18 @@
         });
     }
 
-    // Inicialización al cargar la ventana
     window.onload = function() {
-        console.log("NetQuest Pro inicializado correctamente.");
+        // Detectar si el alumno abrió un enlace con ?pin=1234
+        const urlParams = new URLSearchParams(window.location.search);
+        const pinFromUrl = urlParams.get('pin');
+        if (pinFromUrl) {
+            const pinInput = document.getElementById('joinPinInput');
+            if (pinInput) {
+                pinInput.value = pinFromUrl;
+                document.getElementById('playerNameInput').focus();
+                showToast(`PIN ${pinFromUrl} cargado automáticamente. ¡Escribe tu nombre!`);
+            }
+        }
     };
 </script>
 </body>
